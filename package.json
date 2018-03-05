@@ -1,0 +1,29 @@
+{
+  "name": "rainbow-ui",
+  "version": "0.0.0",
+  "description": "Webgl library in reasonml",
+  "scripts": {
+    "start": "./lib/bs/bytecode/indexhot.byte",
+    "start:native": "./lib/bs/native/index.native",
+    "build": "bsb -make-world",
+    "build:web": "bsb -make-world -backend js",
+    "build:native": "bsb -make-world -backend native",
+    "clean": "bsb -clean-world"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+github.com/codewaterlabs/rainbow-ui"
+  },
+  "keywords": [],
+  "author": "Gudmund Vatn",
+  "license": "MIT",
+  "dependencies": {
+    "ReasonglInterface": "github:bsansouci/reasongl-interface",
+    "ReasonglNative": "github:bsansouci/reasongl-native",
+    "ReasonglWeb": "github:bsansouci/reasongl-web",
+    "matchenv": "bsansouci/matchenv"
+  },
+  "devDependencies": {
+    "bs-platform": "bsansouci/bsb-native"
+  }
+}

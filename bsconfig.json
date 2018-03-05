@@ -1,0 +1,12 @@
+{
+  "name": "Rainbow-ui",
+  "sources": "src",
+  "bs-dependencies": ["ReasonglInterface", "ReasonglWeb", "ReasonglNative"],
+  "bs-super-errors": true,
+  "entries": [
+    {"backend": "bytecode", "main-module": "IndexHot"},
+    {"backend": "native", "main-module": "Index"},
+    {"backend": "js", "main-module": "Index"}
+  ],
+  "refmt": 3
+}
