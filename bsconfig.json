@@ -1,5 +1,5 @@
 {
-  "name": "Rainbow-ui",
+  "name": "rainbow-ui",
   "sources": "src",
   "bs-dependencies": ["ReasonglInterface", "ReasonglWeb", "ReasonglNative"],
   "bs-super-errors": true,
