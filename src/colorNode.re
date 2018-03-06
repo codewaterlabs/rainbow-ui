@@ -1,8 +1,9 @@
 let vertexSource = {|
     precision mediump float;
     attribute vec2 position;
+    uniform mat3 layout;
     void main() {
-        gl_Position = vec4(position, 0.0, 1.0);
+        gl_Position = vec4((vec3(position, 1.0) * layout).xy, 0.0, 1.0);
     }
 |};
 

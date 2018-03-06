@@ -2,7 +2,15 @@ type sceneState = {placeholder: int};
 
 let setup = _canvas : sceneState => {placeholder: 0};
 
-let createRootNode = _state => ColorNode.makeNode(~color=Color.make(0.5, 0.4, 0.6), ());
+let createRootNode = _state => {
+    Scene.(Layout.vertical(
+        ~size=Dimensions(Scale(1.0), Scale(1.0)),
+        ~margin=Margin(Scale(0.2)),
+        [
+            ColorNode.makeNode(~color=Color.make(0.5, 0.4, 0.6), ())
+        ]
+    ))
+};
 
 let createScene = (canvas, state) =>
   Scene.make(canvas, state, createRootNode(state), ~drawListDebug=false, ());
