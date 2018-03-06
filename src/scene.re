@@ -3583,6 +3583,9 @@ module UVec3f = {
     Gpu.Uniform.setVec3f(self.uniform, v);
     queueUpdates(scene, self.nodes);
   };
+  let setQuiet = (self, v) => {
+    Gpu.Uniform.setVec3f(self.uniform, v);
+  };
   let setArr = (scene, self, arr) => {
     Gpu.Uniform.setVec3f(self.uniform, Data.Vec3.fromArray(arr));
     queueUpdates(scene, self.nodes);
@@ -3602,6 +3605,8 @@ module UVec4f = {
     makeSceneUniform(Gpu.UniformVec4f(ref(Data.Vec4.make(a, b, c, d))));
   let fromArray = arr =>
     makeSceneUniform(Gpu.UniformVec4f(ref(Data.Vec4.fromArray(arr))));
+  let vec = v =>
+    makeSceneUniform(Gpu.UniformVec4f(ref(v)));
   let set = (scene, self, v) => {
     Gpu.Uniform.setVec4f(self.uniform, v);
     queueUpdates(scene, self.nodes);

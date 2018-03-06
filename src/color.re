@@ -5,12 +5,15 @@ type channel =
   | Green
   | Blue;
 
+let make = (r, g, b) => [|r, g, b|];
+
 let from255 = (r, g, b) => [|
   float_of_int(r) /. 255.0,
   float_of_int(g) /. 255.0,
   float_of_int(b) /. 255.0
 |];
 
+/* Added this as make() */
 let fromFloats = (r, g, b) => [|r, g, b|];
 
 let fromArray = a : t => {
