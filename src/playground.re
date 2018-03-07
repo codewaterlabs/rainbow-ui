@@ -10,7 +10,7 @@ let createRootNode = _state => {
             ColorNode.makeNode(
                 ~color=Color.make(0.5, 0.4, 0.6),
                 ~size=WidthRatio(Scale(0.5), 2.0),
-                ~maxHeight=Pixel(500.0),
+                ~maxHeight=Pixels(500.0),
                 ()
             )
         ]

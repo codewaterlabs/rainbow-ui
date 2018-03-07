@@ -23,7 +23,7 @@ type vAlign =
 type dimension =
   | Scale(float)
   | ScreenScale(float)
-  | Pixel(float);
+  | Pixels(float);
 
 type margin =
   | Margin(dimension)
@@ -122,6 +122,7 @@ and node('s) = {
   transparent: bool,
   blendFactor,
   partialDraw: bool,
+  /* todo: could be in layout/style config */
   mutable hidden: bool,
   mutable loading: bool,
   deps: list(node('s)),
@@ -350,7 +351,7 @@ let quadVertices = Gpu.VertexBuffer.makeQuad();
 
 let quadIndices = Gpu.IndexBuffer.makeQuad();
 
-let makeLayout =
+let nodeLayout =
     (
       ~size=Dimensions(Scale(1.0), Scale(1.0)),
       ~padding=?,
@@ -373,6 +374,60 @@ let makeLayout =
   spacing,
   hAlign,
   vAlign
+};
+
+let fromNodeLayout =
+  (
+    ~size=?,
+    ~padding=?,
+    ~margin=?,
+    ~spacing=?,
+    ~childLayout=?,
+    ~hAlign=?,
+    ~vAlign=?,
+    ~maxWidth=?,
+    ~maxHeight=?,
+    layout
+  )
+  : layout => {
+    {
+    size: switch (size) {
+    | None => layout.size
+    | Some(size) => size
+    },
+    padding: switch (padding) {
+    | None => layout.padding
+    | Some(padding) => padding
+    },
+    margin: switch (margin) {
+    | None => layout.margin
+    | Some(margin) => margin
+    },
+    childLayout: switch (childLayout) {
+    | None => layout.childLayout
+    | Some(childLayout) => childLayout
+    },
+    spacing: switch (spacing) {
+    | None => layout.spacing
+    | Some(spacing) => spacing
+    },
+    hAlign: switch (hAlign) {
+    | None => layout.hAlign
+    | Some(hAlign) => hAlign
+    },
+    vAlign: switch (vAlign) {
+    | None => layout.vAlign
+    | Some(vAlign) => vAlign
+    },
+    maxWidth: switch (maxWidth) {
+    | None => layout.maxWidth
+    | Some(maxWidth) => maxWidth
+    },
+    maxHeight: switch (maxHeight) {
+    | None => layout.maxHeight
+    | Some(maxHeight) => maxHeight
+    }
+  }
 };
 
 module SceneVO = {
@@ -498,15 +553,16 @@ let makeNode =
       ~layoutUniform=true,
       ~pixelSizeUniform=false,
       ~elapsedUniform=false,
-      ~size=Dimensions(Scale(1.0), Scale(1.0)),
+      ~size=?,
       ~maxWidth=?,
       ~maxHeight=?,
       ~padding=?,
       ~margin=?,
-      ~childLayout=Horizontal,
+      ~childLayout=?,
       ~spacing=?,
-      ~hAlign=AlignCenter,
-      ~vAlign=AlignTop,
+      ~hAlign=?,
+      ~vAlign=?,
+      ~layout=?,
       ~selfDraw=true,
       ~loading=false,
       ~transparent=false,
@@ -656,7 +712,34 @@ let makeNode =
     | (Some(_), Some(_), _) =>
       failwith("Attribs not usable when program is provided")
     };
-  let layout = {size, padding, margin, childLayout, spacing, hAlign, vAlign, maxWidth, maxHeight};
+  let layout = switch (layout) {
+  | Some(layout) =>
+    fromNodeLayout(
+      ~size?, 
+      ~padding,
+      ~margin,
+      ~childLayout?,
+      ~spacing,
+      ~hAlign?,
+      ~vAlign?,
+      ~maxWidth,
+      ~maxHeight,
+      layout
+    )
+  | None =>
+    nodeLayout(
+      ~size?, 
+      ~padding?,
+      ~margin?,
+      ~childLayout?,
+      ~spacing?,
+      ~hAlign?,
+      ~vAlign?,
+      ~maxWidth?,
+      ~maxHeight?,
+      ()
+    )
+  };
   /* Easy way to create texture to draw to, this can
      be used in tandem with ~texNodes.
      Todo: pool of textures to draw to? This would
@@ -2527,13 +2610,13 @@ let calcLayout = scene => {
       switch dim {
       | Scale(scale) => outerWidth *. scale
       | ScreenScale(scale) => vpWidth *. scale
-      | Pixel(pixels) => pixels
+      | Pixels(pixels) => pixels
       };
     let ydim = dim =>
       switch dim {
       | Scale(scale) => outerHeight *. scale
       | ScreenScale(scale) => vpHeight *. scale
-      | Pixel(pixels) => pixels
+      | Pixels(pixels) => pixels
       };
     switch node.layout.margin {
     | None => ()
@@ -2555,7 +2638,7 @@ let calcLayout = scene => {
           cl.marginX2 = scaledX;
           cl.marginY1 = scaledY;
           cl.marginY2 = scaledY;
-        | Pixel(pixels) =>
+        | Pixels(pixels) =>
           cl.marginX1 = pixels;
           cl.marginX2 = pixels;
           cl.marginY1 = pixels;
@@ -2588,7 +2671,7 @@ let calcLayout = scene => {
       | None => width
       | Some(maxWidth) =>
         switch (maxWidth) {
-        | Pixel(pixels) => (width > pixels) ? pixels : width
+        | Pixels(pixels) => (width > pixels) ? pixels : width
         | ScreenScale(scale) => (width > vpWidth *. scale) ? vpWidth *. scale : width
         | Scale(scale) => (width > paddedWidth *. scale) ? paddedWidth *. scale : width
         }
@@ -2599,7 +2682,7 @@ let calcLayout = scene => {
       | None => height
       | Some(maxHeight) =>
         switch (maxHeight) {
-        | Pixel(pixels) => (height > pixels) ? pixels : height
+        | Pixels(pixels) => (height > pixels) ? pixels : height
         | ScreenScale(scale) => (height > vpHeight *. scale) ? vpHeight *. scale : height
         | Scale(scale) => (height > paddedHeight *. scale) ? paddedHeight *. scale : height
         }
@@ -2643,12 +2726,12 @@ let calcLayout = scene => {
         /* Get in pixel or ratio form */
         (
           checkMaxWidth(switch dimX {
-          | Pixel(pixels) => pixels
+          | Pixels(pixels) => pixels
           | Scale(scale) => paddedWidth *. scale
           | ScreenScale(scale) => vpWidth *. scale
           }),
           checkMaxHeight(switch dimY {
-          | Pixel(pixels) => pixels
+          | Pixels(pixels) => pixels
           | Scale(scale) => paddedHeight *. scale
           | ScreenScale(scale) => vpWidth *. scale
           })
@@ -2656,7 +2739,7 @@ let calcLayout = scene => {
       | WidthRatio(dimX, ratio) =>
         let width =
           checkMaxWidth(switch dimX {
-          | Pixel(pixels) => pixels
+          | Pixels(pixels) => pixels
           | Scale(scale) => paddedWidth *. scale
           | ScreenScale(scale) => vpWidth *. scale
           });
@@ -2674,7 +2757,7 @@ let calcLayout = scene => {
       | HeightRatio(dimY, ratio) =>
         let height =
           switch dimY {
-          | Pixel(pixels) => pixels
+          | Pixels(pixels) => pixels
           | Scale(scale) => paddedHeight *. scale
           | ScreenScale(scale) => vpHeight *. scale
           };
@@ -2708,7 +2791,7 @@ let calcLayout = scene => {
           cl.pXOffset,
           cl.pYOffset
         )
-      | Some(Pixel(padding)) => (
+      | Some(Pixels(padding)) => (
           cl.pWidth -. padding *. 2.0,
           cl.pHeight -. padding *. 2.0,
           cl.pXOffset +. padding,
@@ -2819,7 +2902,7 @@ let calcLayout = scene => {
          possibly restrict to width, height dimensions */
       let spacing =
         switch layout.spacing {
-        | Some(Pixel(pixel)) => pixel
+        | Some(Pixels(pixel)) => pixel
         | Some(Scale(scale)) => childWidth *. scale
         | Some(ScreenScale(scale)) => vpWidth *. scale
         | None => 0.0
@@ -2903,7 +2986,7 @@ let calcLayout = scene => {
     | Vertical =>
       let spacing =
         switch layout.spacing {
-        | Some(Pixel(pixel)) => pixel
+        | Some(Pixels(pixel)) => pixel
         | Some(Scale(scale)) => childHeight *. scale
         | Some(ScreenScale(scale)) => vpHeight *. scale
         | None => 0.0

@@ -10,6 +10,8 @@ let vertical =
       ~hidden=false,
       ~hAlign=Scene.AlignCenter,
       ~vAlign=Scene.AlignMiddle,
+      ~maxWidth=?,
+      ~maxHeight=?,
       children
     ) =>
   Scene.makeNode(
@@ -22,6 +24,8 @@ let vertical =
     ~childLayout=Scene.Vertical,
     ~hAlign,
     ~vAlign,
+    ~maxWidth?,
+    ~maxHeight?,
     ~selfDraw=false,
     ~children,
     ~hidden,
@@ -34,7 +38,13 @@ let horizontal =
       ~cls="horizontalLayout",
       ~size=Scene.Aspect(1.0),
       ~spacing=?,
+      ~margin=?,
+      ~padding=?,
       ~hidden=false,
+      ~hAlign=Scene.AlignLeft,
+      ~vAlign=Scene.AlignTop,
+      ~maxWidth=?,
+      ~maxHeight=?,
       children
     ) =>
   Scene.makeNode(
@@ -42,6 +52,12 @@ let horizontal =
     ~cls,
     ~size,
     ~spacing?,
+    ~margin?,
+    ~padding?,
+    ~hAlign,
+    ~vAlign,
+    ~maxWidth?,
+    ~maxHeight?,
     ~childLayout=Scene.Horizontal,
     ~selfDraw=false,
     ~hidden,
@@ -54,22 +70,30 @@ let stacked =
       ~key=?,
       ~cls="stackedLayout",
       ~size=Scene.Aspect(1.0),
+      ~spacing=?,
+      ~padding=?,
       ~hidden=false,
       ~hAlign=Scene.AlignCenter,
-      ~vAlign=Scene.AlignTop,
+      ~vAlign=Scene.AlignMiddle,
+      ~maxWidth=?,
+      ~maxHeight=?,
       ~margin=?,
       children
     ) =>
   Scene.makeNode(
     ~key?,
     ~cls,
-    ~size,
     ~childLayout=Scene.Stacked,
     ~selfDraw=false,
     ~hidden,
+    ~size,
+    ~spacing?,
+    ~margin?,
+    ~padding?,
     ~hAlign,
     ~vAlign,
-    ~margin?,
+    ~maxWidth?,
+    ~maxHeight?,
     ~children,
     ()
   );
