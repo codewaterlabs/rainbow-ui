@@ -223,6 +223,8 @@ and sceneTexture = {
 }
 and layout = {
   size: blockSize,
+  maxWidth: option(dimension),
+  maxHeight: option(dimension),
   padding: option(dimension),
   margin: option(margin),
   childLayout,
@@ -357,10 +359,14 @@ let makeLayout =
       ~childLayout=Horizontal,
       ~hAlign=AlignCenter,
       ~vAlign=AlignTop,
+      ~maxWidth=?,
+      ~maxHeight=?,
       ()
     )
     : layout => {
   size,
+  maxWidth,
+  maxHeight,
   padding,
   margin,
   childLayout,
@@ -493,6 +499,8 @@ let makeNode =
       ~pixelSizeUniform=false,
       ~elapsedUniform=false,
       ~size=Dimensions(Scale(1.0), Scale(1.0)),
+      ~maxWidth=?,
+      ~maxHeight=?,
       ~padding=?,
       ~margin=?,
       ~childLayout=Horizontal,
@@ -648,7 +656,7 @@ let makeNode =
     | (Some(_), Some(_), _) =>
       failwith("Attribs not usable when program is provided")
     };
-  let layout = {size, padding, margin, childLayout, spacing, hAlign, vAlign};
+  let layout = {size, padding, margin, childLayout, spacing, hAlign, vAlign, maxWidth, maxHeight};
   /* Easy way to create texture to draw to, this can
      be used in tandem with ~texNodes.
      Todo: pool of textures to draw to? This would
@@ -2503,7 +2511,7 @@ type parentDrawToTex = {
 
 /* Todo: More just in time, and fine grained updates */
 let calcLayout = scene => {
-  let debug = true;
+  let debug = false;
   /* These are assumed "ints"/rounded */
   let vpWidth = float_of_int(scene.canvas.width);
   let vpHeight = float_of_int(scene.canvas.height);
@@ -2575,58 +2583,94 @@ let calcLayout = scene => {
   let calcNodeDimensions = (node, paddedWidth, paddedHeight) => {
     calcMargins(node, paddedWidth, paddedHeight);
     let cl = node.cLayout;
+    let checkMaxWidth = (width) => {
+      switch (node.layout.maxWidth) {
+      | None => width
+      | Some(maxWidth) =>
+        switch (maxWidth) {
+        | Pixel(pixels) => (width > pixels) ? pixels : width
+        | ScreenScale(scale) => (width > vpWidth *. scale) ? vpWidth *. scale : width
+        | Scale(scale) => (width > paddedWidth *. scale) ? paddedWidth *. scale : width
+        }
+      };
+    };
+    let checkMaxHeight = (height) => {
+      switch (node.layout.maxHeight) {
+      | None => height
+      | Some(maxHeight) =>
+        switch (maxHeight) {
+        | Pixel(pixels) => (height > pixels) ? pixels : height
+        | ScreenScale(scale) => (height > vpHeight *. scale) ? vpHeight *. scale : height
+        | Scale(scale) => (height > paddedHeight *. scale) ? paddedHeight *. scale : height
+        }
+      };
+    };
     let (nodeWidth, nodeHeight) =
       switch node.layout.size {
       | Aspect(ratio) =>
         switch node.layout.margin {
         | Some(_) =>
           /* Keeping aspect inside margins */
-          let innerWidth = paddedWidth -. cl.marginX1 -. cl.marginX2;
-          let innerHeight = paddedHeight -. cl.marginY1 -. cl.marginY2;
+          let constrWidth = checkMaxWidth(paddedWidth);
+          let constrHeight = checkMaxHeight(paddedHeight);
+          let innerWidth = checkMaxWidth(constrWidth -. cl.marginX1 -. cl.marginX2);
+          let innerHeight = checkMaxHeight(constrHeight -. cl.marginY1 -. cl.marginY2);
           let parentAspect = innerWidth /. innerHeight;
           if (ratio < parentAspect) {
             /* Limit by height */
             let innerWidth = innerHeight *. ratio;
-            (innerWidth +. cl.marginX1 +. cl.marginX2, paddedHeight);
+            (innerWidth +. cl.marginX1 +. cl.marginX2, constrHeight);
           } else {
             /* Limit by width */
             let innerHeight = innerWidth /. ratio;
-            (paddedWidth, innerHeight +. cl.marginY1 +. cl.marginY2);
+            (constrWidth, innerHeight +. cl.marginY1 +. cl.marginY2);
           };
         | None =>
-          let parentAspect = paddedWidth /. paddedHeight;
+          let constrWidth = checkMaxWidth(paddedWidth);
+          let constrHeight = checkMaxHeight(paddedHeight);
+          let parentAspect = constrWidth /. constrHeight;
           if (ratio < parentAspect) {
             /* Limit by height */
-            let width = paddedHeight *. ratio;
-            (width, paddedHeight);
+            let width = constrHeight *. ratio;
+            (width, constrHeight);
           } else {
             /* Limit by width */
-            let height = paddedWidth /. ratio;
-            (paddedWidth, height);
+            let height = constrWidth /. ratio;
+            (constrWidth, height);
           };
         }
       | Dimensions(dimX, dimY) =>
         /* Get in pixel or ratio form */
         (
-          switch dimX {
+          checkMaxWidth(switch dimX {
           | Pixel(pixels) => pixels
           | Scale(scale) => paddedWidth *. scale
           | ScreenScale(scale) => vpWidth *. scale
-          },
-          switch dimY {
+          }),
+          checkMaxHeight(switch dimY {
           | Pixel(pixels) => pixels
           | Scale(scale) => paddedHeight *. scale
           | ScreenScale(scale) => vpWidth *. scale
-          }
+          })
         )
       | WidthRatio(dimX, ratio) =>
         let width =
-          switch dimX {
+          checkMaxWidth(switch dimX {
           | Pixel(pixels) => pixels
           | Scale(scale) => paddedWidth *. scale
           | ScreenScale(scale) => vpWidth *. scale
-          };
-        (width, width /. ratio);
+          });
+        switch (node.layout.maxHeight) {
+        | None => (width, width *. ratio)
+        | Some(_) =>
+          let scaledHeight = width *. ratio;
+          let checkedHeight = checkMaxHeight(scaledHeight);
+          if (checkedHeight < scaledHeight) {
+            (width *. (checkedHeight /. scaledHeight), checkedHeight)
+          } else {
+            (width, width *. ratio)
+          }
+        };
       | HeightRatio(dimY, ratio) =>
         let height =
           switch dimY {
@@ -2634,7 +2678,17 @@ let calcLayout = scene => {
           | Scale(scale) => paddedHeight *. scale
           | ScreenScale(scale) => vpHeight *. scale
           };
-        (height *. ratio, height);
+        switch (node.layout.maxWidth) {
+        | None => (height *. ratio, height)
+        | Some(_) =>
+          let scaledWidth = height *. ratio;
+          let checkedWidth = checkMaxWidth(scaledWidth);
+          if (checkedWidth < scaledWidth) {
+            (height *. (checkedWidth /. scaledWidth), checkedWidth)
+          } else {
+            (height, height *. ratio)
+          }
+        };
       };
     cl.pWidth = nodeWidth;
     cl.pHeight = nodeHeight;
@@ -3465,7 +3519,7 @@ let run =
   calcLayout(scene);
   /* Time for resize requested, this is throttled */
   let resizeRequested = ref(None);
-  let resizeThrottle = 0.7;
+  let resizeThrottle = 0.02;
   /* Start render loop */
   Gl.render(
     ~window=canvas.window,
@@ -3486,7 +3540,7 @@ let run =
         switch resizeRequested^ {
         | None => ()
         | Some(resizeTime) =>
-          if (resizeTime > canvas.elapsed -. resizeThrottle) {
+          if (canvas.elapsed > resizeTime +. resizeThrottle) {
             resizeRequested := None;
             switch resize {
             | Some(resize) => resize(userState^)

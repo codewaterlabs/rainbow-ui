@@ -16,10 +16,16 @@ let fragmentSource = {|
     }
 |};
 
+/* Todo: Consider better api/more general way to
+   expose generic layout properties */
 let makeNode = (
     ~color=?,
     ~uniform=?,
     ~hidden=?,
+    ~size=?,
+    ~margin=?,
+    ~maxWidth=?,
+    ~maxHeight=?,
     ()
 ) => {
   let uniform = switch (color, uniform) {
@@ -36,6 +42,10 @@ let makeNode = (
       ~vertShader=Gpu.Shader.make(vertexSource),
       ~fragShader=Gpu.Shader.make(fragmentSource),
       ~hidden=?hidden,
+      ~size=?,
+      ~margin=?,
+      ~maxWidth=?,
+      ~maxHeight=?,
       ~uniforms=[("color", uniform)],
       ()
     )

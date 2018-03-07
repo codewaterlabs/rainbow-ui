@@ -5,9 +5,14 @@ let setup = _canvas : sceneState => {placeholder: 0};
 let createRootNode = _state => {
     Scene.(Layout.vertical(
         ~size=Dimensions(Scale(1.0), Scale(1.0)),
-        ~margin=Margin(Scale(0.2)),
+        ~margin=Margin(Scale(0.0)),
         [
-            ColorNode.makeNode(~color=Color.make(0.5, 0.4, 0.6), ())
+            ColorNode.makeNode(
+                ~color=Color.make(0.5, 0.4, 0.6),
+                ~size=WidthRatio(Scale(0.5), 2.0),
+                ~maxHeight=Pixel(500.0),
+                ()
+            )
         ]
     ))
 };
