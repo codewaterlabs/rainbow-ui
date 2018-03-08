@@ -63,6 +63,13 @@ type fbufferConfig = {
   height: int
 };
 
+type aspectMod =
+  | NoScale
+  | ScaleByX
+  | ScaleByY
+  | ScaleByBiggest
+  | ScaleBySmallest;
+
 /* user defined state and update flags */
 type t('s) = {
   state: 's,
@@ -96,7 +103,9 @@ type t('s) = {
   /* Whether to process queued drawstates/deps.
      This can be activated when there is resource
      availability (maybe automatically?) */
-  initQueued: bool
+  initQueued: bool,
+  /* (node with scale to transform, node with coord system to extend, Mat3 uniform) */
+  mutable nodeScaleUniforms: list((node('s), node('s), Gpu.Uniform.t))
 }
 and drawListDebug('s) = {draw: DrawListDebug.t}
 and updateState = {
@@ -142,6 +151,12 @@ and node('s) = {
   elapsedUniform: option(Gpu.uniform),
   drawToTexture: option(Gpu.Texture.t),
   texTransUniform: option(Gpu.uniform),
+  /* Nodescale uniforms translates from
+     this nodes -1.0 to 1.0 to another nodes -1.0 to 1.0
+     On scenePrograms, these fit in regular uniform slots */
+  nodeScaleUniforms: list((string, Gpu.Uniform.t)),
+  /* Todo: Implement aspect modification */
+  aspectMod,
   clearOnDraw: bool,
   mutable parent: option(node('s)),
   mutable scene: option(t('s))
@@ -165,7 +180,8 @@ and sceneProgramInited = {
   layoutUniform: option(Gpu.Gl.uniformT),
   pixelSizeUniform: option(Gpu.Gl.uniformT),
   elapsedUniform: option(Gpu.Gl.uniformT),
-  texTransUniform: option(Gpu.Gl.uniformT)
+  texTransUniform: option(Gpu.Gl.uniformT),
+  nodeScaleUniforms: Hashtbl.t(string, Gpu.Gl.uniformT)
 }
 /* Sceneprogram to allow multiple nodes using the
    same program while optionally providing/maintaining
@@ -201,7 +217,11 @@ and sceneProgram = {
   layoutUniform: bool,
   pixelSizeUniform: bool,
   elapsedUniform: bool,
-  texTransUniform: bool
+  texTransUniform: bool,
+  /* Currently name of transform matrix variable,
+     possibly these could generalize to other "coord systems",
+     not sure */
+  nodeScaleUniforms: list(string)
 }
 /* Also consider assigning id's to these
    objects, then connecting id's to nodes */
@@ -487,6 +507,7 @@ let makeProgram =
       ~pixelSizeUniform=false,
       ~elapsedUniform=false,
       ~texTransUniform=false,
+      ~nodeScaleUniforms=[],
       ()
     )
     : sceneProgram => {
@@ -527,7 +548,8 @@ let makeProgram =
     layoutUniform,
     pixelSizeUniform,
     elapsedUniform,
-    texTransUniform
+    texTransUniform,
+    nodeScaleUniforms
   };
 };
 
@@ -536,6 +558,9 @@ let defaultVo = () => {
   vertexBuffer: quadVertices,
   indexBuffer: Some(quadIndices)
 };
+
+type nodeScaleUniform =
+  | NodeScaleUniform(string, string);
 
 let makeNode =
     (
@@ -553,6 +578,8 @@ let makeNode =
       ~layoutUniform=true,
       ~pixelSizeUniform=false,
       ~elapsedUniform=false,
+      ~nodeScaleUniforms=[],
+      ~aspectMod=NoScale,
       ~size=?,
       ~maxWidth=?,
       ~maxHeight=?,
@@ -689,6 +716,11 @@ let makeNode =
     } else {
       None;
     };
+  let nodeScaleUniforms =
+    List.map(
+      ((otherNode, alias)) => (otherNode, Gpu.Uniform.make(alias, Gpu.UniformMat3f(ref(Data.Mat3.id())))),
+      nodeScaleUniforms
+    );
   let vo =
     switch vo {
     | Some(vo) => Some(vo)
@@ -825,6 +857,8 @@ let makeNode =
     layoutUniform,
     pixelSizeUniform,
     elapsedUniform,
+    aspectMod,
+    nodeScaleUniforms,
     drawToTexture,
     clearOnDraw,
     texTransUniform,
@@ -833,8 +867,9 @@ let makeNode =
   };
 };
 
+/* Sets up various things in tree structure */
 let setNodeParentsSceneKeyCls = scene => {
-  let rec loop = (node, parent) => {
+  let rec loop = (node, parent, nodeScaleUniforms) => {
     node.parent = parent;
     node.scene = Some(scene);
     switch node.key {
@@ -856,10 +891,20 @@ let setNodeParentsSceneKeyCls = scene => {
         Hashtbl.add(scene.nodesByCls, cls, [node]);
       }
     };
-    List.iter(dep => loop(dep, Some(node)), node.deps);
-    List.iter(child => loop(child, Some(node)), node.children);
+    let nodeScaleUniforms = List.fold_left((nodeScaleUniforms, (scaleNode, uniform : Gpu.Uniform.t)) => {
+      [(node, scaleNode, uniform), ...nodeScaleUniforms]
+    }, nodeScaleUniforms, node.nodeScaleUniforms);
+    let nodeScaleUniforms = List.fold_left((nodeScaleUniforms, dep) => loop(dep, Some(node), nodeScaleUniforms), nodeScaleUniforms, node.deps);
+    List.fold_left((nodeScaleUniforms, child) => loop(child, Some(node), nodeScaleUniforms), nodeScaleUniforms, node.children);
   };
-  loop(scene.root, None);
+  let nodeScaleUniforms = loop(scene.root, None, []);
+  /* Here we can create node references from keys and save
+     a tiny amount in lookups, revise if needed */
+  scene.nodeScaleUniforms =
+    List.map(
+      ((node, scaleNode, uniform)) => (node, Hashtbl.find(scene.nodesByKey, scaleNode), uniform),
+      nodeScaleUniforms
+    );
 };
 
 /* Can also consider using depth buffer
@@ -1038,7 +1083,8 @@ let make = (canvas, state, root, ~drawListDebug=false, ~initQueued=true, ()) => 
     hiddenNodes: [],
     queuedDrawStates: [],
     queuedDeps: [],
-    initQueued
+    initQueued,
+    nodeScaleUniforms: []
   };
   setNodeParentsSceneKeyCls(scene);
   scene.updateRoot = Some(buildUpdateTree(scene, scene.root));
@@ -1068,6 +1114,7 @@ let createDrawStateUniforms =
       pixelSizeUniform,
       layoutUniform,
       texTransUniform,
+      nodeScaleUniforms,
       customUniforms
     ) => {
   /* Texture uniforms */
@@ -1116,6 +1163,12 @@ let createDrawStateUniforms =
       ]
     | None => uniforms
     };
+  let uniforms =
+    List.fold_left(
+      (uniforms, (otherNode, uniform)) => [uniform, ...uniforms],
+      uniforms,
+      nodeScaleUniforms
+    );
   List.append(uniforms, customUniforms);
 };
 
@@ -1223,6 +1276,11 @@ let initSceneProgram = (scene, sceneP: sceneProgram) =>
       } else {
         None;
       };
+    let nodeScaleUniforms = Hashtbl.create(List.length(sceneP.nodeScaleUniforms));
+    List.iter(
+      (alias) => Hashtbl.add(nodeScaleUniforms, alias, Gpu.Uniform.initLoc(context, iProgram.programRef, alias)),
+      sceneP.nodeScaleUniforms
+    );
     let iVo =
       switch sceneP.vo {
       | Some(vo) =>
@@ -1246,7 +1304,8 @@ let initSceneProgram = (scene, sceneP: sceneProgram) =>
       layoutUniform,
       pixelSizeUniform,
       elapsedUniform,
-      texTransUniform
+      texTransUniform,
+      nodeScaleUniforms
     };
   };
 
@@ -1345,6 +1404,22 @@ let createProgramDrawState = (scene, node, program: sceneProgram) => {
       uniforms,
       program.textureList
     );
+  /* NodeScaleUniforms */
+  let uniforms =
+    List.fold_left(
+      (uniforms, (_otherNode, uniform: Gpu.Uniform.t)) => {
+        [
+          Gpu.Uniform.initedFromLoc(
+            Gpu.GlType.Mat3f,
+            uniform.uniform,
+            Hashtbl.find(pInited.nodeScaleUniforms, uniform.name)
+          ),
+          ...uniforms
+        ]
+      },
+      uniforms,
+      node.nodeScaleUniforms
+    );
   let textures =
     List.map(
       name =>
@@ -1417,6 +1492,7 @@ let createNodeDrawState = (scene, node) => {
       node.pixelSizeUniform,
       node.layoutUniform,
       node.texTransUniform,
+      node.nodeScaleUniforms,
       nodeUniforms
     );
   let textures =
@@ -2592,6 +2668,27 @@ type parentDrawToTex = {
   texVpHeight: float
 };
 
+/* Updates nodeScaleUniforms, currently
+   this requires layout to be done, it's a bit special
+   as the two involved nodes might be in either
+   depth order, so it's easier when layout
+   is already done. To make this more fine grained
+   it should be possible to request layout of
+   a given node, (even when that node is a parent?),
+   or fiddle it to work in edge cases */
+let updateNodeScaled = scene => {
+  List.iter(
+    ((node, extendNode, uniform : Gpu.Uniform.t)) => {
+      let scaleX = node.rect.w /. extendNode.rect.w;
+      let scaleY = node.rect.h /. extendNode.rect.h;
+      let transX = (node.rect.x -. extendNode.rect.x) /. extendNode.rect.w *. 2.0;
+      let transY = (node.rect.y -. extendNode.rect.y) /. extendNode.rect.h *. 2.0;
+      Gpu.Uniform.setMat3f(uniform.uniform, Data.Mat3.scaleTrans(scaleX, scaleY, transX, transY));
+    },
+    scene.nodeScaleUniforms
+  );
+};
+
 /* Todo: More just in time, and fine grained updates */
 let calcLayout = scene => {
   let debug = false;
@@ -3250,6 +3347,7 @@ let calcLayout = scene => {
   scene.root.cLayout.pXOffset = 0.0;
   scene.root.cLayout.pYOffset = 0.0;
   calcNodeLayout(scene.root, None);
+  updateNodeScaled(scene);
 };
 
 /* Returns list of dep node ids */

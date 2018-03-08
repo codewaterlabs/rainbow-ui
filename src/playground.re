@@ -2,15 +2,67 @@ type sceneState = {placeholder: int};
 
 let setup = _canvas : sceneState => {placeholder: 0};
 
+let vertex1 = {|
+    precision mediump float;
+    attribute vec2 position;
+    uniform mat3 layout;
+    varying vec2 posColor;
+    void main() {
+        posColor = position * 0.2;
+        gl_Position = vec4((vec3(position, 1.0) * layout).xy, 0.0, 1.0);
+    }
+|};
+
+let fragment1 = {|
+    precision mediump float;
+    varying vec2 posColor;
+
+    void main() {
+        gl_FragColor = vec4(posColor, 0.0, 1.0);
+    }
+|};
+
+let vertex2 = {|
+    precision mediump float;
+    attribute vec2 position;
+    uniform mat3 layout;
+    varying vec2 posColor;
+    uniform mat3 other;
+    void main() {
+        posColor = (vec3(position, 1.0) * other).xy * 0.2;
+        gl_Position = vec4((vec3(position, 1.0) * layout).xy, 0.0, 1.0);
+    }
+|};
+
+let fragment2 = {|
+    precision mediump float;
+    varying vec2 posColor;
+
+    void main() {
+        gl_FragColor = vec4(posColor, 0.0, 1.0);
+    }
+|};
 let createRootNode = _state => {
-    Scene.(Layout.vertical(
+    Scene.(Layout.horizontal(
         ~size=Dimensions(Scale(1.0), Scale(1.0)),
         ~margin=Margin(Scale(0.0)),
+        ~hAlign=Scene.AlignCenter,
+        ~spacing=Scene.Scale(0.01),
         [
-            ColorNode.makeNode(
-                ~color=Color.make(0.5, 0.4, 0.6),
-                ~size=WidthRatio(Scale(0.5), 2.0),
+            Scene.makeNode(
+                ~key="test1",
+                ~vertShader=Gpu.Shader.make(vertex1),
+                ~fragShader=Gpu.Shader.make(fragment1),
+                ~size=WidthRatio(Scale(0.3), 2.0),
                 ~maxHeight=Pixels(500.0),
+                ()
+            ),
+            Scene.makeNode(
+                ~vertShader=Gpu.Shader.make(vertex2),
+                ~fragShader=Gpu.Shader.make(fragment2),
+                ~size=WidthRatio(Scale(0.3), 2.0),
+                ~maxHeight=Pixels(500.0),
+                ~nodeScaleUniforms=[("test1", "other")],
                 ()
             )
         ]

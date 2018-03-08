@@ -10,9 +10,14 @@ type lightDir =
   | StaticDir(Data.Vec3.t)
   | DynamicDir(Scene.sceneUniform);
 
+/* Todo: ScreenCoords are maybe a bit like camera coords, for
+   both screen and local coords, consider som sort of aspect
+   modifier. */
 type coordSystem =
   | ScreenCoords
-  | LocalCoords;
+  | LocalCoords
+  /* One more spot to clean up :) Basically using global names in for these */
+  | Named(string);
 
 type fragSource = {
   statements: string,
@@ -56,11 +61,13 @@ module PointLight = {
     hSpecular: int
   };
   let makeHash = (self: t) : hash => {
-    hLightPos: lightPosHash(self.pos),
-    hColor: lightColorHash(self.color),
-    hCoords: self.coords,
-    hFactor: self.factor,
-    hSpecular: self.specular
+    {
+      hLightPos: lightPosHash(self.pos),
+      hColor: lightColorHash(self.color),
+      hCoords: self.coords,
+      hFactor: self.factor,
+      hSpecular: self.specular
+    }
   };
   let make =
       (
@@ -93,17 +100,19 @@ module PointLight = {
   };
   let getFragVarDecls = (self, i) => {
     let istr = string_of_int(i);
-    let dir =
+    /* Pos */
+    let decls =
       switch self.pos {
-      | DynamicPos(_) => "uniform vec3 uPointPos" ++ istr ++ ";\n"
-      | _ => ""
+      | DynamicPos(_) => ["uniform vec3 uPointPos" ++ istr ++ ";"]
+      | _ => []
       };
-    let color =
+    /* Color */
+    let decls =
       switch self.color {
-      | DynamicColor(_) => "uniform vec3 uPointColor" ++ istr ++ ";\n"
-      | StaticColor(_) => ""
+      | DynamicColor(_) => ["uniform vec3 uPointColor" ++ istr ++ ";\n", ...decls]
+      | StaticColor(_) => decls
       };
-    dir ++ color;
+    String.concat("\n", decls);
   };
   let getLightFuncSource = (self, i, camera: Camera.t) => {
     let istr = string_of_int(i);
@@ -115,7 +124,8 @@ module PointLight = {
     let point =
       switch self.coords {
       | ScreenCoords => "screenP"
-      | LocalCoords => "localP"
+      | LocalCoords => "vPosition"
+      | Named(name) => name
       };
     let color =
       switch self.color {
@@ -175,7 +185,7 @@ module PointLight = {
   /* Light function for only this pointLight */
   let getLightFunction = (self, camera: Camera.t) => {
     let part = getLightFuncSource(self, 0, camera);
-    "vec3 lighting(vec3 localP, vec3 screenP, vec3 normal) {\n"
+    "vec3 lighting(vec3 normal) {\n"
     ++ part.statements
     ++ "return pow("
     ++ part.addend
@@ -333,7 +343,7 @@ module ProgramLight = {
         ("", []),
         parts
       );
-    "vec3 lighting(vec3 localP, vec3 screenP, vec3 normal) {\n"
+    "vec3 lighting(vec3 normal) {\n"
     ++ statements
     ++ "return pow("
     ++ String.concat(" + ", addends)

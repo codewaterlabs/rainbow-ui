@@ -155,6 +155,9 @@ let makeFragmentSource = self => {
     ++ lightDecls
     ++ {|
 
+        vec3 screenP;
+        vec3 localP;
+
         |}
     ++ lightSrc
     ++ {|
@@ -199,12 +202,13 @@ let makeFragmentSource = self => {
             vec3 pixelEye = vec3(fragCoord, 4.0);
             float dist = shortestDistance(pixelEye, vec3(0.0, 0.0, -1.0));
             // All points should hit a shape in this shader
-            vec3 p = pixelEye + dist * vec3(0.0, 0.0, -1.0);
+            localP = pixelEye + dist * vec3(0.0, 0.0, -1.0);
             vec3 color = vec3(0.6, 0.6, 0.6);
-            vec3 N = estimateNormal(p);
+            vec3 N = estimateNormal(localP);
             // todo: Adjust estimateNormal?
             N.y = N.y * -1.0;
-            float light = (lighting(p, vec3(vScreenPos.xy, p.z), N)).x;
+            screenP = vec3(vScreenPos.xy, localP.z);
+            float light = (lighting(N)).x;
             color = color * light;
             float alpha = |}
     ++ glAlpha
