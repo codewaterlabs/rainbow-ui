@@ -41,11 +41,11 @@ let makeNode = (
       ~cls="colorNode",
       ~vertShader=Gpu.Shader.make(vertexSource),
       ~fragShader=Gpu.Shader.make(fragmentSource),
-      ~hidden=?hidden,
-      ~size=?,
-      ~margin=?,
-      ~maxWidth=?,
-      ~maxHeight=?,
+      ~hidden?,
+      ~size?,
+      ~margin?,
+      ~maxWidth?,
+      ~maxHeight?,
       ~uniforms=[("color", uniform)],
       ()
     )

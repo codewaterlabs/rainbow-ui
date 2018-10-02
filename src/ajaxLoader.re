@@ -27,7 +27,7 @@ let loadFiles = (assets, cb) => {
           req,
           ~kind="GET",
           ~filename="assets/" ++ fileName,
-          ~whatIsThis=Js.true_
+          ~whatIsThis=true
         );
         Reasongl.onreadystatechange(req, () =>
           if (Reasongl.getReadyState(req) === 4

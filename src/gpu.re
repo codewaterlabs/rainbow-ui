@@ -174,11 +174,11 @@ module Uniform = {
     };
   [@bs.send]
   external uniformMatrix3fv :
-    (Gl.contextT, Gl.uniformT, Js.boolean, array(float)) => unit =
+    (Gl.contextT, Gl.uniformT, bool, array(float)) => unit =
     "uniformMatrix3fv";
   [@bs.send]
   external uniformMatrix4fv :
-    (Gl.contextT, Gl.uniformT, Js.boolean, array(float)) => unit =
+    (Gl.contextT, Gl.uniformT, bool, array(float)) => unit =
     "uniformMatrix4fv";
   /* Put here to avoid currying while bucklescript doesnt yet optimize labelled arguments */
   [@bs.send]
@@ -210,10 +210,10 @@ module Uniform = {
       uniform4f(context, uniform.loc, value[0], value[1], value[2], value[3]);
     | UniformMat3f(values) =>
       let values = values^;
-      uniformMatrix3fv(context, uniform.loc, Js.false_, values);
+      uniformMatrix3fv(context, uniform.loc, false, values);
     | UniformMat4f(values) =>
       let values = values^;
-      uniformMatrix4fv(context, uniform.loc, Js.false_, values);
+      uniformMatrix4fv(context, uniform.loc, false, values);
     };
 };
 
@@ -237,7 +237,7 @@ module VertexAttrib = {
   /* context, attribute, size, type, normalize, stride, offset */
   [@bs.send]
   external _vertexAttribPointer :
-    (Gl.contextT, Gl.attributeT, int, int, Js.boolean, int, int) => unit =
+    (Gl.contextT, Gl.attributeT, int, int, bool, int, int) => unit =
     "vertexAttribPointer";
   let setPointer = (inited, context) =>
     _vertexAttribPointer(
@@ -245,7 +245,7 @@ module VertexAttrib = {
       inited.loc,
       inited.size,
       inited.type_,
-      Js.false_,
+      false,
       inited.stride,
       inited.offset
     );
@@ -1096,7 +1096,7 @@ module Canvas = {
     "getContext";
   let cull_face = 2884;
   let init = (width, height) => {
-    let window = Gl.Window.init(~argv=[||]);
+    let window = Gl.Window.init(~screen="main", ~argv=[||]);
     Gl.Window.setWindowSize(~window, ~width, ~height);
     /*let context = Gl.Window.getContext(window);*/
     let (canvasEl, _) = __destructureWindowHack(window);
@@ -1168,16 +1168,15 @@ module Canvas = {
   };
   [@bs.send]
   external _colorMask :
-    (Gl.contextT, Js.boolean, Js.boolean, Js.boolean, Js.boolean) => unit =
+    (Gl.contextT, bool, bool, bool, bool) => unit =
     "colorMask";
   [@bs.send]
-  external _depthMask : (Gl.contextT, Js.boolean) => unit = "depthMask";
+  external _depthMask : (Gl.contextT, bool) => unit = "depthMask";
   let colorMask = (context, r, g, b, a) => {
-    let jb = Js.Boolean.to_js_boolean;
-    _colorMask(context, jb(r), jb(g), jb(b), jb(a));
+    _colorMask(context, r, g, b, a);
   };
   let depthMask = (context, flag) =>
-    _depthMask(context, Js.Boolean.to_js_boolean(flag));
+    _depthMask(context, flag);
   let clear = (canvas, r, g, b, a) => {
     Gl.clearColor(~context=canvas.context, ~r, ~g, ~b, ~a);
     Gl.clear(~context=canvas.context, ~mask=Constants.color_buffer_bit);
