@@ -1,7 +1,7 @@
 {
   "name": "rainbow-ui",
   "sources": "src",
-  "bs-dependencies": ["ReasonglInterface", "ReasonglWeb", "ReasonglNative"],
+  "bs-dependencies": ["reasongl"],
   "bs-super-errors": true,
   "entries": [
     {"backend": "bytecode", "main-module": "IndexHot"},
